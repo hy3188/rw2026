@@ -14,12 +14,9 @@ const AUTO_ACCESS = process.env.AUTO_ACCESS || false; // false关闭自动保活
 const FILE_PATH = process.env.FILE_PATH || './tmp';   // 运行目录,sub节点文件保存目录
 const SUB_PATH = process.env.SUB_PATH || 'sub';       // 订阅路径
 const PORT = process.env.SERVER_PORT || process.env.PORT || 3000;        // http服务订阅端口
-const UUID = process.env.UUID || '1600b823-9863-406a-8675-6ac47ea0e32b'; // 使用哪吒v1,在不同的平台运行需修改UUID,否则会覆盖
-const NEZHA_SERVER = process.env.NEZHA_SERVER || '';        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
-const NEZHA_PORT = process.env.NEZHA_PORT || '';            // 使用哪吒v1请留空，哪吒v0需填写
-const NEZHA_KEY = process.env.NEZHA_KEY || '';              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
-const ARGO_DOMAIN = process.env.ARGO_DOMAIN || 'r2.badboycc123456.cf';          // 固定隧道域名,留空即启用临时隧道
-const ARGO_AUTH = process.env.ARGO_AUTH || 'eyJhIjoiOTBiYWNhZTk3MmZmM2FlZTQ3YzZiYmM0ZjEzODY4ZjUiLCJ0IjoiYTA3NzAwYmEtNTc4MS00MzIzLWJlZTAtOTM4NTBiOGE3OWU5IiwicyI6Ik5qQmhZV1V3WlRBdE9EbGtZaTAwTlRZeUxUazFZek10WWpGbVkyRm1NR0V5TkdJeSJ9';              // 固定隧道密钥json或token,留空即启用临时隧道,json获取地址：https://json.zone.id
+const UUID = process.env.UUID || '';                                   // 必须通过环境变量设置，不提供默认值
+const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '';  // 固定隧道域名，留空即启用临时隧道
+const ARGO_AUTH   = process.env.ARGO_AUTH   || '';  // 固定隧道密钥 json 或 token，留空即启用临时隧道
 const ARGO_PORT = process.env.ARGO_PORT || 8001;            // 固定隧道端口,使用token需在cloudflare后台设置和这里一致
 const CFIP = process.env.CFIP || 'cdns.doon.eu.org';        // 节点优选域名或优选ip  
 const CFPORT = process.env.CFPORT || 443;                   // 节点优选域名或优选ip对应的端口
@@ -44,12 +41,8 @@ function generateRandomName() {
 }
 
 // 全局常量
-const npmName = generateRandomName();
 const webName = generateRandomName();
 const botName = generateRandomName();
-const phpName = generateRandomName();
-let npmPath = path.join(FILE_PATH, npmName);
-let phpPath = path.join(FILE_PATH, phpName);
 let webPath = path.join(FILE_PATH, webName);
 let botPath = path.join(FILE_PATH, botName);
 let subPath = path.join(FILE_PATH, 'sub.txt');
@@ -143,14 +136,12 @@ function getDownloadInfo() {
     family: 'amd',
     xrayMachine: '64',
     cloudflaredArch: 'amd64',
-    nezhaArch: 'amd64'
   };
 
   if (arch === 'arm64') {
     info.family = 'arm';
     info.xrayMachine = 'arm64-v8a';
     info.cloudflaredArch = 'arm64';
-    info.nezhaArch = 'arm64';
     return info;
   }
 
@@ -160,7 +151,6 @@ function getDownloadInfo() {
     // 这里选用 arm32-v7a，覆盖大多数 32 位 ARM Linux
     info.xrayMachine = 'arm32-v7a';
     info.cloudflaredArch = 'arm';
-    info.nezhaArch = 'arm';
     return info;
   }
 
@@ -169,7 +159,6 @@ function getDownloadInfo() {
     info.family = 'amd';
     info.xrayMachine = '32';
     info.cloudflaredArch = '386';
-    info.nezhaArch = '386';
     return info;
   }
 
@@ -374,67 +363,7 @@ async function downloadFilesAndRun() {
       }
     });
   }
-  const filesToAuthorize = NEZHA_PORT ? [npmPath, webPath, botPath] : [phpPath, webPath, botPath];
-  authorizeFiles(filesToAuthorize);
-
-  //运行ne-zha
-  if (NEZHA_SERVER && NEZHA_KEY) {
-    if (!NEZHA_PORT) {
-      // 检测哪吒是否开启TLS
-      const port = NEZHA_SERVER.includes(':') ? NEZHA_SERVER.split(':').pop() : '';
-      const tlsPorts = new Set(['443', '8443', '2096', '2087', '2083', '2053']);
-      const nezhatls = tlsPorts.has(port) ? 'true' : 'false';
-      // 生成 config.yaml
-      const configYaml = `
-client_secret: ${NEZHA_KEY}
-debug: false
-disable_auto_update: true
-disable_command_execute: false
-disable_force_update: true
-disable_nat: false
-disable_send_query: false
-gpu: false
-insecure_tls: true
-ip_report_period: 1800
-report_delay: 4
-server: ${NEZHA_SERVER}
-skip_connection_count: true
-skip_procs_count: true
-temperature: false
-tls: ${nezhatls}
-use_gitee_to_upgrade: false
-use_ipv6_country_code: false
-uuid: ${UUID}`;
-      
-      fs.writeFileSync(path.join(FILE_PATH, 'config.yaml'), configYaml);
-      
-      // 运行 v1
-      const command = `nohup ${phpPath} -c "${FILE_PATH}/config.yaml" >/dev/null 2>&1 &`;
-      try {
-        await exec(command);
-        console.log(`${phpName} is running`);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.error(`php running error: ${error}`);
-      }
-    } else {
-      let NEZHA_TLS = '';
-      const tlsPorts = ['443', '8443', '2096', '2087', '2083', '2053'];
-      if (tlsPorts.includes(NEZHA_PORT)) {
-        NEZHA_TLS = '--tls';
-      }
-      const command = `nohup ${npmPath} -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} --disable-auto-update --report-delay 4 --skip-conn --skip-procs >/dev/null 2>&1 &`;
-      try {
-        await exec(command);
-        console.log(`${npmName} is running`);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.error(`npm running error: ${error}`);
-      }
-    }
-  } else {
-    console.log('NEZHA variable is empty,skip running');
-  }
+  authorizeFiles([webPath, botPath]);
   //运行xr-ay
   const command1 = `nohup ${webPath} -c ${FILE_PATH}/config.json >/dev/null 2>&1 &`;
   try {
@@ -492,19 +421,7 @@ function getFilesForArchitecture(architecture) {
     }
   ];
 
-  if (NEZHA_SERVER && NEZHA_KEY) {
-    const agentUrl = `https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_${info.nezhaArch}.zip`;
-    const agentItem = {
-      fileUrl: agentUrl,
-      archive: { innerBasename: 'nezha-agent' }
-    };
 
-    if (NEZHA_PORT) {
-      baseFiles.unshift({ fileName: npmPath, ...agentItem });
-    } else {
-      baseFiles.unshift({ fileName: phpPath, ...agentItem });
-    }
-  }
 
   return baseFiles;
 }
@@ -703,13 +620,7 @@ async function uploadNodes() {
 // 90s后删除相关文件
 function cleanFiles() {
   setTimeout(() => {
-    const filesToDelete = [bootLogPath, configPath, webPath, botPath];  
-    
-    if (NEZHA_PORT) {
-      filesToDelete.push(npmPath);
-    } else if (NEZHA_SERVER && NEZHA_KEY) {
-      filesToDelete.push(phpPath);
-    }
+    const filesToDelete = [bootLogPath, configPath, webPath, botPath];
 
     // Windows系统使用不同的删除命令
     if (process.platform === 'win32') {
